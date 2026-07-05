@@ -135,6 +135,23 @@ export function setSetting(key: string, value: string) {
     .run(key, value);
 }
 
+// Скрытые инструменты: сделки по ним не показываются в списках и статистике.
+// Скрываем, а не удаляем — синхронизация иначе пересоздала бы их из fills.
+export function getHiddenSymbols(): string[] {
+  const raw = getSetting("hidden_symbols");
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((s) => typeof s === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+export function setHiddenSymbols(symbols: string[]) {
+  setSetting("hidden_symbols", JSON.stringify([...new Set(symbols)].sort()));
+}
+
 export function getSyncState(key: string): string | null {
   const row = getDb().prepare("SELECT value FROM sync_state WHERE key = ?").get(key) as
     | { value: string }

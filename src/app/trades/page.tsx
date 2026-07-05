@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { fmtDateTime, fmtMoney, pnlColor } from "@/lib/format";
+import { fmtDateTime, fmtMoney, fmtQty, pnlColor } from "@/lib/format";
 
 interface Trade {
   id: number;
@@ -77,7 +77,7 @@ export default function TradesPage() {
                       <span className={`px-3 py-3 w-[10%] ${t.direction === "short" ? "text-loss" : "text-profit"}`}>
                         {t.direction === "short" ? "Short" : "Long"}
                       </span>
-                      <span className="px-3 py-3 w-[12%] text-right num">{t.qty}</span>
+                      <span className="px-3 py-3 w-[12%] text-right num">{fmtQty(t.qty)}</span>
                       <span className="px-3 py-3 w-[18%] text-muted num">{fmtDateTime(t.opened_at)}</span>
                       <span className="px-3 py-3 w-[18%] text-muted num">{fmtDateTime(t.closed_at)}</span>
                       <span className={`px-3 py-3 w-[16%] text-right num font-medium ${pnlColor(t.net_pnl)}`}>

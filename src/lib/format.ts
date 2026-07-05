@@ -12,6 +12,13 @@ export function fmtPrice(v: number | null | undefined): string {
   return v.toLocaleString("ru-RU", { maximumFractionDigits: digits });
 }
 
+// Объём собирается суммированием дробных исполнений — обрезаем шум
+// floating point (0.010400000000000003 -> 0.0104).
+export function fmtQty(v: number | null | undefined): string {
+  if (v == null || Number.isNaN(v)) return "—";
+  return parseFloat(v.toPrecision(10)).toString();
+}
+
 export function fmtPercent(v: number | null | undefined): string {
   if (v == null || Number.isNaN(v)) return "—";
   const sign = v > 0 ? "+" : "";

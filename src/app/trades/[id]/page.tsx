@@ -3,7 +3,7 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { TradeChart } from "@/components/TradeChart";
-import { fmtDateTime, fmtDuration, fmtMoney, fmtPrice, pnlColor } from "@/lib/format";
+import { fmtDateTime, fmtDuration, fmtMoney, fmtPrice, fmtQty, pnlColor } from "@/lib/format";
 
 interface Trade {
   id: number;
@@ -148,7 +148,7 @@ export default function TradePage({ params }: { params: Promise<{ id: string }> 
               value={fmtDuration((trade.closed_at ?? Date.now()) - trade.opened_at)}
             />
             <div className="border-t border-border my-1" />
-            <FactRow label="Объём" value={`${trade.qty} (${trade.symbol.split("-")[0]})`} />
+            <FactRow label="Объём" value={`${fmtQty(trade.qty)} (${trade.symbol.split("-")[0]})`} />
             <FactRow label="Средний вход" value={fmtPrice(trade.avg_entry)} />
             <FactRow label="Средний выход" value={isOpen ? "—" : fmtPrice(trade.avg_exit)} />
             <div className="border-t border-border my-1" />
@@ -193,7 +193,7 @@ export default function TradePage({ params }: { params: Promise<{ id: string }> 
                     <span className={isEntryFill(f) ? "text-accent-bright" : "text-muted"}>
                       {isEntryFill(f) ? "вход" : "выход"} · {fmtDateTime(f.ts)}
                     </span>
-                    <span>{f.qty} @ {fmtPrice(f.price)}</span>
+                    <span>{fmtQty(f.qty)} @ {fmtPrice(f.price)}</span>
                   </div>
                 ))}
               </div>

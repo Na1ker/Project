@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { EquityChart } from "@/components/EquityChart";
-import { fmtDateTime, fmtDuration, fmtMoney, fmtPercent, fmtPrice, pnlColor } from "@/lib/format";
+import { fmtDateTime, fmtDuration, fmtMoney, fmtPercent, fmtPrice, fmtQty, pnlColor } from "@/lib/format";
 
 const PERIODS = [7, 30, 90, 180] as const;
 
@@ -219,7 +219,7 @@ export default function Dashboard() {
                     {p.position_side === "SHORT" ? "Short" : "Long"}
                     {p.leverage ? ` ×${p.leverage}` : ""}
                   </td>
-                  <td className="text-right num">{p.qty}</td>
+                  <td className="text-right num">{fmtQty(p.qty)}</td>
                   <td className="text-right num">{fmtPrice(p.entry_price)}</td>
                   <td className="text-right num">{fmtPrice(p.mark_price)}</td>
                   <td className={`text-right num ${pnlColor(p.unrealized_pnl)}`}>{fmtMoney(p.unrealized_pnl)}</td>

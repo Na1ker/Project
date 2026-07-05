@@ -1,4 +1,11 @@
-import { getDb } from "./db";
+import { getDb, getHiddenSymbols } from "./db";
+
+// SQL-фрагмент для исключения скрытых инструментов + параметры к нему.
+export function hiddenFilter(): { clause: string; params: string[] } {
+  const hidden = getHiddenSymbols();
+  if (hidden.length === 0) return { clause: "", params: [] };
+  return { clause: ` AND symbol NOT IN (${hidden.map(() => "?").join(",")})`, params: hidden };
+}
 
 export interface PeriodStats {
   period: number;                 // дней
@@ -45,9 +52,10 @@ export function getPeriodStats(days: number): PeriodStats {
   const db = getDb();
   const since = Date.now() - days * 86_400_000;
 
+  const hf = hiddenFilter();
   const trades = db
-    .prepare("SELECT * FROM trades WHERE status = 'closed' AND closed_at >= ?")
-    .all(since) as unknown as TradeRow[];
+    .prepare(`SELECT * FROM trades WHERE status = 'closed' AND closed_at >= ?${hf.clause}`)
+    .all(since, ...hf.params) as unknown as TradeRow[];
 
   const results = trades.map(netPnl);
   const wins = results.filter((r) => r > 0);

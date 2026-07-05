@@ -11,10 +11,26 @@ function SettingsForm() {
   const [current, setCurrent] = useState<{ apiKeyMasked: string | null } | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [allSymbols, setAllSymbols] = useState<string[]>([]);
+  const [hidden, setHidden] = useState<string[]>([]);
 
   useEffect(() => {
     fetch("/api/settings").then((r) => r.json()).then(setCurrent).catch(() => {});
+    fetch("/api/settings/hidden-symbols")
+      .then((r) => r.json())
+      .then((d) => { setAllSymbols(d.allSymbols ?? []); setHidden(d.hidden ?? []); })
+      .catch(() => {});
   }, []);
+
+  async function toggleHidden(symbol: string) {
+    const next = hidden.includes(symbol) ? hidden.filter((s) => s !== symbol) : [...hidden, symbol];
+    setHidden(next);
+    await fetch("/api/settings/hidden-symbols", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ hidden: next }),
+    });
+  }
 
   async function save() {
     setSaving(true);
@@ -90,6 +106,29 @@ function SettingsForm() {
           {saving ? "Проверяю ключи…" : "Подключить BingX"}
         </button>
       </div>
+
+      {allSymbols.length > 0 && (
+        <div className="card p-6 space-y-4">
+          <h2 className="font-medium text-lg">Скрытые инструменты</h2>
+          <p className="text-sm text-muted">
+            Сделки по отмеченным инструментам не показываются в списке и не учитываются
+            в статистике. Данные остаются в базе — снять галочку можно в любой момент.
+          </p>
+          <div className="space-y-2">
+            {allSymbols.map((s) => (
+              <label key={s} className="flex items-center gap-3 text-sm cursor-pointer hover:text-white transition-colors">
+                <input
+                  type="checkbox"
+                  checked={hidden.includes(s)}
+                  onChange={() => toggleHidden(s)}
+                  className="accent-[#c22b3f] w-4 h-4"
+                />
+                <span className={hidden.includes(s) ? "line-through text-muted" : ""}>{s}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
