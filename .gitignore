@@ -9,11 +9,11 @@
 .env
 .env.local
 
-# Dependencies / build
+# Dependencies / build (только в корне — не задевает .claude/skills/build)
 node_modules/
 .next/
-dist/
-build/
+/dist/
+/build/
 __pycache__/
 *.pyc
 
