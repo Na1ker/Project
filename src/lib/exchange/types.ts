@@ -15,6 +15,7 @@ export interface OpenPosition {
   markPrice: number;
   unrealizedPnl: number;
   leverage: number | null;
+  marginMode: "cross" | "isolated" | null;
   openedAt: number | null; // unix ms, если биржа отдаёт
 }
 
@@ -39,6 +40,25 @@ export interface IncomeRecord {
   ts: number;
 }
 
+// Закрытая позиция из истории позиций биржи — источник истины для сделок (v1.1).
+export interface PositionHistoryRecord {
+  positionId: string;
+  symbol: string;
+  direction: "long" | "short";
+  qty: number;             // суммарно открыто (в монетах)
+  avgEntry: number;
+  avgExit: number;
+  realizedPnl: number;     // ценовой PnL (Closed PnL биржи)
+  netProfit: number | null; // итог с учётом комиссий/фандинга (Realized PnL биржи)
+  commission: number;      // >= 0
+  funding: number;         // со знаком биржи
+  leverage: number | null;
+  marginMode: "cross" | "isolated" | null;
+  openedAt: number;
+  closedAt: number;
+  raw?: unknown;
+}
+
 export interface Candle {
   ts: number;             // открытие свечи, unix ms
   open: number;
@@ -59,6 +79,12 @@ export interface ExchangeConnector {
   getIncome(startTs: number, endTs: number): Promise<IncomeRecord[]>;
   /** Публичные свечи. interval: 1m|5m|15m|1h|4h|1d */
   getCandles(symbol: string, interval: string, startTs: number, endTs: number): Promise<Candle[]>;
+  /**
+   * История закрытых позиций инструмента за интервал — источник истины для
+   * сделок. BingX отдаёт историю только по конкретному символу.
+   * Опциональный: биржи без такого API работают через реконструкцию из fills.
+   */
+  getPositionHistory?(symbol: string, startTs: number, endTs: number): Promise<PositionHistoryRecord[]>;
 }
 
 export class ExchangeAuthError extends Error {

@@ -66,7 +66,7 @@ function SettingsForm() {
         </div>
       )}
 
-      <div className="card p-6 space-y-4">
+      <div className="card p-6 space-y-4 rise-in">
         <h2 className="font-medium text-lg">API-ключи BingX</h2>
         <p className="text-sm text-muted">
           Создай ключ в BingX: Профиль → API-менеджмент. Достаточно прав «чтение»
@@ -101,14 +101,14 @@ function SettingsForm() {
         <button
           onClick={save}
           disabled={saving || !apiKey.trim() || !apiSecret.trim()}
-          className="w-full bg-accent hover:bg-accent-bright disabled:opacity-40 disabled:cursor-not-allowed transition-colors rounded-xl py-2.5 font-medium"
+          className="w-full bg-accent hover:bg-accent-bright disabled:opacity-40 disabled:cursor-not-allowed pressable rounded-xl py-2.5 font-medium"
         >
           {saving ? "Проверяю ключи…" : "Подключить BingX"}
         </button>
       </div>
 
       {allSymbols.length > 0 && (
-        <div className="card p-6 space-y-4">
+        <div className="card p-6 space-y-4 rise-in" style={{ "--rise-delay": "60ms" } as React.CSSProperties}>
           <h2 className="font-medium text-lg">Скрытые инструменты</h2>
           <p className="text-sm text-muted">
             Сделки по отмеченным инструментам не показываются в списке и не учитываются

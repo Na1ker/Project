@@ -32,3 +32,69 @@ body {
 .num {
   font-variant-numeric: tabular-nums;
 }
+
+/* --- Motion foundation ---
+   Дашборд открывают десятки раз в день, поэтому анимации сдержанные:
+   короткие (<300ms), с сильным ease-out — интерфейс отвечает мгновенно. */
+:root {
+  --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out-strong: cubic-bezier(0.77, 0, 0.175, 1);
+}
+
+/* Отклик на нажатие: интерфейс «слышит» пользователя.
+   transform вместо цвета — работает на GPU, не трогает layout. */
+.pressable {
+  transition: transform 160ms var(--ease-out-strong), background-color 150ms ease, color 150ms ease, opacity 150ms ease;
+}
+.pressable:active {
+  transform: scale(0.97);
+}
+
+/* Вход карточек: лёгкий подъём из opacity 0 + 8px. Никогда не scale(0) —
+   в реальном мире ничто не появляется из ниоткуда. */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+.rise-in {
+  animation: rise-in 300ms var(--ease-out-strong) both;
+  animation-delay: var(--rise-delay, 0ms);
+}
+
+/* Строки таблиц: плавный hover без задержки на уход. */
+.row-hover {
+  transition: background-color 150ms ease;
+}
+
+/* Пульс для «Загрузка…» — воспринимаемая скорость. */
+@keyframes soft-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+.loading-pulse {
+  animation: soft-pulse 1.2s ease-in-out infinite;
+}
+
+/* Плавное появление контента после загрузки (график, список) —
+   без прыжка из пустоты. */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+.fade-in {
+  animation: fade-in 250ms ease-out both;
+}
+
+/* Меньше движения — только мягкие проявления, без перемещений. */
+@media (prefers-reduced-motion: reduce) {
+  .rise-in {
+    animation: fade-in 200ms ease both;
+  }
+  .pressable:active {
+    transform: none;
+  }
+}

@@ -18,16 +18,29 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     | { text: string; updated_at: number }
     | undefined;
 
+  // Сделки из истории позиций не хранят fill_ids — исполнения привязываются
+  // по инструменту и интервалу времени позиции (требование 4 спеки v1.1).
   const fillIds = JSON.parse(trade.fill_ids) as number[];
-  const fills =
-    fillIds.length > 0
-      ? db
-          .prepare(
-            `SELECT id, side, position_side, price, qty, commission, ts FROM fills
-             WHERE id IN (${fillIds.map(() => "?").join(",")}) ORDER BY ts`,
-          )
-          .all(...fillIds)
-      : [];
+  let fills;
+  if (fillIds.length > 0) {
+    fills = db
+      .prepare(
+        `SELECT id, side, position_side, price, qty, commission, ts FROM fills
+         WHERE id IN (${fillIds.map(() => "?").join(",")}) ORDER BY ts`,
+      )
+      .all(...fillIds);
+  } else {
+    const from = trade.opened_at - 60_000;
+    const to = (trade.closed_at ?? Date.now()) + 60_000;
+    const side = trade.direction === "long" ? "LONG" : "SHORT";
+    fills = db
+      .prepare(
+        `SELECT id, side, position_side, price, qty, commission, ts FROM fills
+         WHERE symbol = ? AND ts >= ? AND ts <= ? AND position_side IN (?, 'BOTH')
+         ORDER BY ts`,
+      )
+      .all(trade.symbol, from, to, side);
+  }
 
   // Для открытой сделки — текущий нереализованный PnL из снапшота позиций
   // (крайний случай спеки «позиция ещё открыта»).

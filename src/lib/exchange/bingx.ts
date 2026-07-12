@@ -8,6 +8,7 @@ import {
   Fill,
   IncomeRecord,
   OpenPosition,
+  PositionHistoryRecord,
 } from "./types";
 
 const BASE_URL = "https://open-api.bingx.com";
@@ -101,6 +102,7 @@ export class BingxConnector implements ExchangeConnector {
         markPrice: string;
         unrealizedProfit: string;
         leverage?: number | string;
+        isolated?: boolean;
         createTime?: number;
         updateTime?: number;
       }>
@@ -115,6 +117,7 @@ export class BingxConnector implements ExchangeConnector {
         markPrice: parseFloat(p.markPrice),
         unrealizedPnl: parseFloat(p.unrealizedProfit),
         leverage: p.leverage != null ? Number(p.leverage) : null,
+        marginMode: p.isolated == null ? null : p.isolated ? "isolated" : "cross",
         openedAt: p.createTime ?? null,
       }));
   }
@@ -208,6 +211,64 @@ export class BingxConnector implements ExchangeConnector {
       out.push(...records);
       if (records.length < 1000) break;
       cursor = Math.max(...records.map((r) => r.ts)) + 1;
+    }
+    return out;
+  }
+
+  async getPositionHistory(symbol: string, startTs: number, endTs: number): Promise<PositionHistoryRecord[]> {
+    // Формат проверен на живом API 08.07.2026: symbol обязателен, пагинация —
+    // pageId с нуля, комиссия в positionCommission (отрицательная),
+    // время закрытия — updateTime.
+    type RawPosition = {
+      positionId: number | string;
+      symbol: string;
+      positionSide?: string;
+      isolated?: boolean;
+      positionAmt?: string | number;
+      closePositionAmt?: string | number;
+      avgPrice?: string | number;
+      avgClosePrice?: string | number;
+      realisedProfit?: string | number;      // ценовой Closed PnL
+      netProfit?: string | number;           // итог биржи (Realized PnL в UI)
+      positionCommission?: string | number;  // отрицательная
+      totalFunding?: string | number;
+      leverage?: string | number;
+      openTime?: number;
+      updateTime?: number;
+    };
+
+    const out: PositionHistoryRecord[] = [];
+    for (let pageId = 0; pageId <= 50; pageId++) {
+      const data = await this.request<{ positionHistory: RawPosition[] }>(
+        "/openApi/swap/v1/trade/positionHistory",
+        { symbol, startTs, endTs, pageId, pageSize: 100 },
+      );
+      const records = data?.positionHistory ?? [];
+      for (const r of records) {
+        const qty = Math.abs(parseFloat(String(r.positionAmt ?? r.closePositionAmt ?? "0")));
+        if (qty === 0) continue;
+        const openedAt = Number(r.openTime ?? 0);
+        const closedAt = Number(r.updateTime ?? 0);
+        if (!openedAt || !closedAt) continue;
+        out.push({
+          positionId: String(r.positionId),
+          symbol: r.symbol,
+          direction: (r.positionSide ?? "").toUpperCase() === "SHORT" ? "short" : "long",
+          qty,
+          avgEntry: parseFloat(String(r.avgPrice ?? "0")),
+          avgExit: parseFloat(String(r.avgClosePrice ?? "0")),
+          realizedPnl: parseFloat(String(r.realisedProfit ?? "0")),
+          netProfit: r.netProfit != null ? parseFloat(String(r.netProfit)) : null,
+          commission: Math.abs(parseFloat(String(r.positionCommission ?? "0"))),
+          funding: parseFloat(String(r.totalFunding ?? "0")),
+          leverage: r.leverage != null ? Number(r.leverage) : null,
+          marginMode: r.isolated == null ? null : r.isolated ? "isolated" : "cross",
+          openedAt,
+          closedAt,
+          raw: r,
+        });
+      }
+      if (records.length < 100) break;
     }
     return out;
   }

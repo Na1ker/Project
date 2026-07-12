@@ -19,6 +19,7 @@ interface Trade {
   commission: number;
   funding: number;
   leverage: number | null;
+  margin_mode: string | null;
   net_pnl: number;
 }
 
@@ -86,7 +87,7 @@ export default function TradePage({ params }: { params: Promise<{ id: string }> 
       </div>
     );
   }
-  if (!trade) return <div className="py-16 text-center text-muted text-sm">Загрузка…</div>;
+  if (!trade) return <div className="py-16 text-center text-muted text-sm loading-pulse">Загрузка…</div>;
 
   const isOpen = trade.status === "open";
   // Для определения вход/выход: у long вход = BUY, у short вход = SELL.
@@ -102,6 +103,7 @@ export default function TradePage({ params }: { params: Promise<{ id: string }> 
           trade.direction === "short" ? "bg-loss/15 text-loss" : "bg-profit/15 text-profit"
         }`}>
           {trade.direction === "short" ? "SHORT" : "LONG"}{trade.leverage ? ` ×${trade.leverage}` : ""}
+          {trade.margin_mode ? ` · ${trade.margin_mode === "isolated" ? "Isolated" : "Cross"}` : ""}
         </span>
         {isOpen && (
           <span className="px-3 py-1 rounded-full text-xs font-medium bg-accent/20 text-accent-bright">
@@ -112,9 +114,9 @@ export default function TradePage({ params }: { params: Promise<{ id: string }> 
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* График: 2/3 ширины */}
-        <div className="lg:col-span-2 card p-5">
+        <div className="lg:col-span-2 card p-5 rise-in">
           {candleData === null ? (
-            <div className="h-[460px] flex items-center justify-center text-muted text-sm">Загружаю график…</div>
+            <div className="h-[460px] flex items-center justify-center text-muted text-sm loading-pulse">Загружаю график…</div>
           ) : candleData.unavailable ? (
             <div className="h-[460px] flex flex-col items-center justify-center text-muted text-sm gap-2">
               <span className="text-2xl">📉</span>
@@ -123,15 +125,29 @@ export default function TradePage({ params }: { params: Promise<{ id: string }> 
             </div>
           ) : (
             <>
-              <div className="text-xs text-muted mb-2">Таймфрейм: {candleData.interval}</div>
+              <div className="text-xs text-muted mb-2">
+                Таймфрейм: {candleData.interval}
+                {fills.length === 0 && " · детальных исполнений нет — маркеры по средним ценам позиции"}
+              </div>
               <TradeChart
                 candles={candleData.candles}
-                marks={fills.map((f) => ({
-                  ts: f.ts,
-                  side: f.side,
-                  price: f.price,
-                  isEntry: isEntryFill(f),
-                }))}
+                marks={
+                  fills.length > 0
+                    ? fills.map((f) => ({
+                        ts: f.ts,
+                        side: f.side,
+                        price: f.price,
+                        isEntry: isEntryFill(f),
+                      }))
+                    : // Fills не покрывают сделку — маркеры входа/выхода строим
+                      // из средних цен и времён истории позиции (крайний случай спеки).
+                      [
+                        { ts: trade.opened_at, side: "BUY" as const, price: trade.avg_entry, isEntry: true },
+                        ...(trade.closed_at && trade.avg_exit != null
+                          ? [{ ts: trade.closed_at, side: "SELL" as const, price: trade.avg_exit, isEntry: false }]
+                          : []),
+                      ]
+                }
               />
             </>
           )}
@@ -139,7 +155,7 @@ export default function TradePage({ params }: { params: Promise<{ id: string }> 
 
         {/* Панель фактов справа (требование 15) */}
         <div className="space-y-5">
-          <div className="card p-5 space-y-3 text-sm">
+          <div className="card p-5 space-y-3 text-sm rise-in" style={{ "--rise-delay": "60ms" } as React.CSSProperties}>
             <div className="text-xs text-muted uppercase tracking-wider">Детали сделки</div>
             <FactRow label="Вход" value={fmtDateTime(trade.opened_at)} />
             <FactRow label="Выход" value={isOpen ? "ещё открыта" : fmtDateTime(trade.closed_at)} />
@@ -213,7 +229,7 @@ export default function TradePage({ params }: { params: Promise<{ id: string }> 
             <button
               onClick={saveNote}
               disabled={noteSaved === "saving"}
-              className="mt-2 w-full bg-accent hover:bg-accent-bright transition-colors rounded-xl py-2 text-sm font-medium disabled:opacity-50"
+              className="mt-2 w-full bg-accent hover:bg-accent-bright pressable rounded-xl py-2 text-sm font-medium disabled:opacity-50"
             >
               {noteSaved === "saving" ? "Сохраняю…" : noteSaved === "saved" ? "Сохранено ✓" : "Сохранить заметку"}
             </button>

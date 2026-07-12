@@ -120,6 +120,33 @@ function migrate(db: DatabaseSync) {
       value TEXT NOT NULL
     );
   `);
+
+  // v1.1: сделки из истории позиций биржи (источник истины).
+  const tradeCols = (db.prepare("PRAGMA table_info(trades)").all() as Array<{ name: string }>).map(
+    (c) => c.name,
+  );
+  if (!tradeCols.includes("position_id")) {
+    db.exec("ALTER TABLE trades ADD COLUMN position_id TEXT");
+  }
+  if (!tradeCols.includes("margin_mode")) {
+    db.exec("ALTER TABLE trades ADD COLUMN margin_mode TEXT");
+  }
+  if (!tradeCols.includes("net_profit")) {
+    // Итог сделки по данным биржи (Realized PnL BingX). Если есть — источник
+    // истины для «чистого PnL» вместо нашей формулы.
+    db.exec("ALTER TABLE trades ADD COLUMN net_profit REAL");
+  }
+  db.exec(
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_trades_position_id ON trades(position_id) WHERE position_id IS NOT NULL",
+  );
+
+  // v1.1-фикс: режим маржи текущих позиций (для открытых сделок).
+  const posCols = (db.prepare("PRAGMA table_info(positions)").all() as Array<{ name: string }>).map(
+    (c) => c.name,
+  );
+  if (!posCols.includes("margin_mode")) {
+    db.exec("ALTER TABLE positions ADD COLUMN margin_mode TEXT");
+  }
 }
 
 export function getSetting(key: string): string | null {

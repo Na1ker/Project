@@ -102,86 +102,101 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Капитал + переключатель периода */}
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <div className="text-sm text-muted mb-1">Общий капитал</div>
-          <div className="text-4xl font-semibold num">
-            {currentEquity ? `${currentEquity.equity.toLocaleString("ru-RU", { maximumFractionDigits: 2 })} USDT` : "—"}
-          </div>
-          {currentEquity && (
-            <div className="text-sm text-muted mt-1 num">
-              баланс {currentEquity.balance.toLocaleString("ru-RU", { maximumFractionDigits: 2 })} ·{" "}
-              нереализ. PnL{" "}
-              <span className={pnlColor(currentEquity.unrealized_pnl)}>{fmtMoney(currentEquity.unrealized_pnl)}</span>
+      {/* Главная связка по скетчу v1.1: слева большая кривая капитала (1),
+          справа колонка с капиталом и метриками (2). Над графиком — ничего. */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+        <div className="lg:col-span-2 card p-5 rise-in">
+          <div className="text-sm text-muted mb-3">Кривая капитала · {period} дн</div>
+          <EquityChart data={equityCurve} height={440} />
+        </div>
+
+        <div className="space-y-4">
+          <div className="card px-5 py-4 rise-in" style={{ "--rise-delay": "40ms" } as React.CSSProperties}>
+            <div className="text-xs text-muted uppercase tracking-wider mb-1.5">Общий капитал</div>
+            <div className="text-3xl font-semibold num">
+              {currentEquity ? `${currentEquity.equity.toLocaleString("ru-RU", { maximumFractionDigits: 2 })} USDT` : "—"}
             </div>
-          )}
-        </div>
-        <div className="flex gap-1 card p-1">
-          {PERIODS.map((p) => (
-            <button
-              key={p}
-              onClick={() => setPeriod(p)}
-              className={`px-4 py-1.5 rounded-xl text-sm transition-colors ${
-                period === p ? "bg-accent text-white" : "text-muted hover:text-white"
-              }`}
-            >
-              {p} дн
-            </button>
-          ))}
-        </div>
-      </div>
+            {currentEquity && (
+              <div className="text-sm text-muted mt-1 num">
+                баланс {currentEquity.balance.toLocaleString("ru-RU", { maximumFractionDigits: 2 })} ·{" "}
+                нереализ. PnL{" "}
+                <span className={pnlColor(currentEquity.unrealized_pnl)}>{fmtMoney(currentEquity.unrealized_pnl)}</span>
+              </div>
+            )}
+          </div>
 
-      {/* Карточки метрик за период */}
-      {stats && stats.trades === 0 ? (
-        <div className="card px-6 py-10 text-center text-muted">
-          Нет закрытых сделок за выбранный период
-        </div>
-      ) : stats ? (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <MetricCard
-            label={`PnL за ${period} дн`}
-            value={<span className={pnlColor(stats.totalPnl)}>{fmtMoney(stats.totalPnl)} USDT</span>}
-            sub={stats.pnlPercent != null ? fmtPercent(stats.pnlPercent) + " от капитала" : undefined}
-          />
-          <MetricCard
-            label="Винрейт"
-            value={stats.winRate != null ? `${stats.winRate.toFixed(1)}%` : "—"}
-            sub={`${stats.wins}W / ${stats.losses}L из ${stats.trades}`}
-          />
-          <MetricCard label="Профит-фактор" value={stats.profitFactorDisplay} />
-          <MetricCard
-            label="Средняя сделка"
-            value={
-              <span className="text-base">
-                <span className="text-profit">{fmtMoney(stats.avgWin)}</span>
-                {" / "}
-                <span className="text-loss">{fmtMoney(stats.avgLoss)}</span>
-              </span>
-            }
-            sub="прибыльная / убыточная"
-          />
-          <MetricCard label="Комиссии за период" value={<span className="text-loss">−{Math.abs(stats.totalCommission).toFixed(2)}</span>} sub="USDT" />
-          <MetricCard
-            label="Фандинг за период"
-            value={<span className={pnlColor(stats.totalFunding)}>{fmtMoney(stats.totalFunding)}</span>}
-            sub="USDT"
-          />
-          <MetricCard label="Сделок" value={String(stats.trades)} />
-          <Link href="/trades" className="card px-5 py-4 flex items-center justify-center text-accent-bright hover:bg-card-hover transition-colors">
-            Все сделки →
-          </Link>
-        </div>
-      ) : null}
+          <div className="flex gap-1 card p-1 rise-in" style={{ "--rise-delay": "80ms" } as React.CSSProperties}>
+            {PERIODS.map((p) => (
+              <button
+                key={p}
+                onClick={() => setPeriod(p)}
+                className={`flex-1 px-3 py-1.5 rounded-xl text-sm pressable ${
+                  period === p ? "bg-accent text-white" : "text-muted hover:text-white"
+                }`}
+              >
+                {p} дн
+              </button>
+            ))}
+          </div>
 
-      {/* Кривая капитала */}
-      <div className="card p-5">
-        <div className="text-sm text-muted mb-3">Кривая капитала · {period} дн</div>
-        <EquityChart data={equityCurve} />
+          {stats && stats.trades === 0 ? (
+            <div className="card px-5 py-8 text-center text-muted text-sm rise-in" style={{ "--rise-delay": "120ms" } as React.CSSProperties}>
+              Нет закрытых сделок за выбранный период
+            </div>
+          ) : stats ? (
+            <div className="card px-5 py-4 space-y-3 text-sm rise-in" style={{ "--rise-delay": "120ms" } as React.CSSProperties}>
+              <StatRow
+                label={`PnL за ${period} дн`}
+                value={
+                  <span className={pnlColor(stats.totalPnl)}>
+                    {fmtMoney(stats.totalPnl)} USDT
+                    {stats.pnlPercent != null && (
+                      <span className="text-muted"> · {fmtPercent(stats.pnlPercent)}</span>
+                    )}
+                  </span>
+                }
+              />
+              <StatRow
+                label="Винрейт"
+                value={
+                  <>
+                    {stats.winRate != null ? `${stats.winRate.toFixed(1)}%` : "—"}
+                    <span className="text-muted"> · {stats.wins}W/{stats.losses}L</span>
+                  </>
+                }
+              />
+              <StatRow label="Профит-фактор" value={stats.profitFactorDisplay} />
+              <StatRow
+                label="Средняя сделка"
+                value={
+                  <>
+                    <span className="text-profit">{fmtMoney(stats.avgWin)}</span>
+                    {" / "}
+                    <span className="text-loss">{fmtMoney(stats.avgLoss)}</span>
+                  </>
+                }
+              />
+              <StatRow
+                label="Комиссии"
+                value={<span className="text-loss">−{Math.abs(stats.totalCommission).toFixed(2)} USDT</span>}
+              />
+              <StatRow
+                label="Фандинг"
+                value={<span className={pnlColor(stats.totalFunding)}>{fmtMoney(stats.totalFunding)} USDT</span>}
+              />
+              <StatRow label="Сделок" value={String(stats.trades)} />
+              <div className="pt-1 border-t border-border">
+                <Link href="/trades" className="text-accent-bright hover:underline text-sm pressable inline-block">
+                  Все сделки →
+                </Link>
+              </div>
+            </div>
+          ) : null}
+        </div>
       </div>
 
       {/* Открытые позиции */}
-      <div className="card p-5">
+      <div className="card p-5 rise-in" style={{ "--rise-delay": "160ms" } as React.CSSProperties}>
         <div className="text-sm text-muted mb-3">Открытые позиции</div>
         {positions.length === 0 ? (
           <div className="py-6 text-center text-muted text-sm">Нет открытых позиций</div>
@@ -211,7 +226,7 @@ export default function Dashboard() {
                   key={`${p.symbol}-${p.position_side}`}
                   onClick={trade ? () => router.push(`/trades/${trade.id}`) : undefined}
                   className={`border-b border-border/50 last:border-0 ${
-                    trade ? "cursor-pointer hover:bg-card-hover transition-colors" : ""
+                    trade ? "cursor-pointer hover:bg-card-hover row-hover" : ""
                   }`}
                 >
                   <td className="py-2.5 font-medium">{p.symbol}{trade ? " ↗" : ""}</td>
@@ -237,12 +252,11 @@ export default function Dashboard() {
   );
 }
 
-function MetricCard({ label, value, sub }: { label: string; value: React.ReactNode; sub?: string }) {
+function StatRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="card px-5 py-4">
-      <div className="text-xs text-muted uppercase tracking-wider mb-1.5">{label}</div>
-      <div className="text-2xl font-semibold num">{value}</div>
-      {sub && <div className="text-xs text-muted mt-1">{sub}</div>}
+    <div className="flex justify-between gap-3">
+      <span className="text-muted">{label}</span>
+      <span className="num text-right font-medium">{value}</span>
     </div>
   );
 }

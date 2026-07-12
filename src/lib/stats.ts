@@ -38,13 +38,26 @@ export interface TradeRow {
   commission: number;
   funding: number;
   leverage: number | null;
+  margin_mode?: string | null;
+  position_id?: string | null;
+  net_profit?: number | null;
   fill_ids: string;
   has_note?: number;
   note?: string | null;
 }
 
-/** Чистый результат сделки: ценовой PnL + фандинг (со знаком биржи) - комиссия. */
-export function netPnl(t: { realized_pnl: number; commission: number; funding: number }): number {
+/**
+ * Чистый результат сделки. Если биржа отдала свой итог (net_profit из истории
+ * позиций) — показываем цифру биржи; иначе считаем сами из ценового PnL,
+ * комиссии и фандинга.
+ */
+export function netPnl(t: {
+  realized_pnl: number;
+  commission: number;
+  funding: number;
+  net_profit?: number | null;
+}): number {
+  if (t.net_profit != null) return t.net_profit;
   return t.realized_pnl - t.commission + t.funding;
 }
 

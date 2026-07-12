@@ -4,7 +4,13 @@ import { useEffect, useRef } from "react";
 import { createChart, ColorType, IChartApi } from "lightweight-charts";
 
 // Кривая капитала за выбранный период (требование 10).
-export function EquityChart({ data }: { data: Array<{ ts: number; equity: number }> }) {
+export function EquityChart({
+  data,
+  height = 280,
+}: {
+  data: Array<{ ts: number; equity: number }>;
+  height?: number;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
 
@@ -21,7 +27,7 @@ export function EquityChart({ data }: { data: Array<{ ts: number; equity: number
       },
       rightPriceScale: { borderColor: "#232329" },
       timeScale: { borderColor: "#232329", timeVisible: true },
-      height: 280,
+      height,
       autoSize: true,
     });
     chartRef.current = chart;
@@ -39,14 +45,14 @@ export function EquityChart({ data }: { data: Array<{ ts: number; equity: number
     chart.timeScale().fitContent();
 
     return () => chart.remove();
-  }, [data]);
+  }, [data, height]);
 
   if (data.length === 0) {
     return (
-      <div className="h-[280px] flex items-center justify-center text-muted text-sm">
+      <div style={{ height }} className="flex items-center justify-center text-muted text-sm">
         Пока нет снапшотов капитала — они начнут собираться после первой синхронизации
       </div>
     );
   }
-  return <div ref={ref} className="w-full" />;
+  return <div ref={ref} className="w-full fade-in" />;
 }

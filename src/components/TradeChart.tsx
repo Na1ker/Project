@@ -94,5 +94,5 @@ export function TradeChart({ candles, marks }: { candles: Candle[]; marks: FillM
     return () => chart.remove();
   }, [candles, marks]);
 
-  return <div ref={ref} className="w-full" />;
+  return <div ref={ref} className="w-full fade-in" />;
 }

@@ -13,6 +13,8 @@ interface Trade {
   closed_at: number | null;
   net_pnl: number;
   has_note: number;
+  leverage: number | null;
+  margin_mode: string | null;
 }
 
 // Список закрытых сделок (требование 13). Открытые показываются на дашборде,
@@ -38,7 +40,7 @@ export default function TradesPage() {
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`px-4 py-1.5 rounded-xl text-sm transition-colors ${
+              className={`px-4 py-1.5 rounded-xl text-sm pressable ${
                 tab === t ? "bg-accent text-white" : "text-muted hover:text-white"
               }`}
             >
@@ -50,7 +52,7 @@ export default function TradesPage() {
 
       <div className="card overflow-hidden">
         {trades === null ? (
-          <div className="py-16 text-center text-muted text-sm">Загрузка…</div>
+          <div className="py-16 text-center text-muted text-sm loading-pulse">Загрузка…</div>
         ) : trades.length === 0 ? (
           <div className="py-16 text-center text-muted text-sm">
             {tab === "closed" ? "Закрытых сделок пока нет" : "Открытых сделок нет"}
@@ -69,13 +71,23 @@ export default function TradesPage() {
               </tr>
             </thead>
             <tbody>
-              {trades.map((t) => (
-                <tr key={t.id} className="border-b border-border/50 last:border-0 hover:bg-card-hover transition-colors">
+              {trades.map((t, i) => (
+                <tr
+                  key={t.id}
+                  className="border-b border-border/50 last:border-0 hover:bg-card-hover row-hover rise-in"
+                  // Stagger только первых строк (30ms шаг): каскад виден, но
+                  // длинный список не ждёт хвоста — дальше все вместе.
+                  style={{ "--rise-delay": `${Math.min(i, 8) * 30}ms` } as React.CSSProperties}
+                >
                   <td className="px-0 py-0" colSpan={7}>
                     <Link href={`/trades/${t.id}`} className="flex items-center w-full">
                       <span className="px-5 py-3 font-medium w-[16%]">{t.symbol}</span>
                       <span className={`px-3 py-3 w-[10%] ${t.direction === "short" ? "text-loss" : "text-profit"}`}>
                         {t.direction === "short" ? "Short" : "Long"}
+                        {t.leverage ? ` ×${t.leverage}` : ""}
+                        {t.margin_mode && (
+                          <span className="text-muted text-xs"> {t.margin_mode === "isolated" ? "Isolated" : "Cross"}</span>
+                        )}
                       </span>
                       <span className="px-3 py-3 w-[12%] text-right num">{fmtQty(t.qty)}</span>
                       <span className="px-3 py-3 w-[18%] text-muted num">{fmtDateTime(t.opened_at)}</span>
