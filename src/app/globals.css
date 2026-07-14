@@ -89,6 +89,39 @@ body {
   animation: fade-in 250ms ease-out both;
 }
 
+/* --- Интро дашборда (v1.4) ---
+   Выразительный оркестрованный вход при полной загрузке главной: каждый блок
+   проявляется прозрачностью + подъёмом + лёгким масштабом (с 0.98, не с нуля).
+   Класс intro-cascade вешается на контейнер только на полную загрузку;
+   задержка каждого блока задаётся через --intro-delay. */
+@keyframes intro-enter {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.98);
+  }
+}
+.intro-cascade .intro-item {
+  animation: intro-enter 440ms var(--ease-out-strong) both;
+  animation-delay: var(--intro-delay, 0ms);
+}
+
+/* Прорисовка кривой капитала: контейнер проявляется клипом слева направо
+   поверх готового canvas (без повторных setData). */
+@keyframes intro-reveal-lr {
+  from {
+    opacity: 0.4;
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+  }
+}
+.intro-cascade .intro-chart {
+  animation: intro-reveal-lr 620ms var(--ease-out-strong) both;
+  animation-delay: var(--intro-delay, 0ms);
+}
+
 /* Меньше движения — только мягкие проявления, без перемещений. */
 @media (prefers-reduced-motion: reduce) {
   .rise-in {
@@ -96,5 +129,12 @@ body {
   }
   .pressable:active {
     transform: none;
+  }
+  /* Интро без движения и прорисовки — только короткий fade. */
+  .intro-cascade .intro-item,
+  .intro-cascade .intro-chart {
+    animation: fade-in 200ms ease both;
+    animation-delay: 0ms;
+    clip-path: none;
   }
 }

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { EquityChart } from "@/components/EquityChart";
+import { useIntroOnce } from "@/lib/useIntroOnce";
 import { fmtDateTime, fmtDuration, fmtMoney, fmtPercent, fmtPrice, fmtQty, pnlColor } from "@/lib/format";
 
 const PERIODS = [7, 30, 90, 180] as const;
@@ -49,6 +50,16 @@ interface StatusInfo {
 
 export default function Dashboard() {
   const router = useRouter();
+  const playIntro = useIntroOnce();
+  // Каскад «разоружается» после завершения оркестра (≤710мс, берём 1с с запасом):
+  // класс .intro-cascade снимается, и последующие ре-рендеры/перемонтирования
+  // блоков (смена периода, автообновление) больше не переигрывают анимацию.
+  const [introArmed, setIntroArmed] = useState(playIntro);
+  useEffect(() => {
+    if (!playIntro) return;
+    const id = setTimeout(() => setIntroArmed(false), 1000);
+    return () => clearTimeout(id);
+  }, [playIntro]);
   const [period, setPeriod] = useState<number>(30);
   const [stats, setStats] = useState<Stats | null>(null);
   const [equityCurve, setEquityCurve] = useState<Array<{ ts: number; equity: number }>>([]);
@@ -84,8 +95,12 @@ export default function Dashboard() {
 
   if (status && !status.hasKeys) return null;
 
+  // Каскад включаем только когда подтверждено, что ключи есть — иначе он
+  // мелькнул бы перед редиректом на онбординг (крайний случай спеки).
+  const introOn = introArmed && status?.hasKeys === true;
+
   return (
-    <div className="space-y-6">
+    <div className={`space-y-6${introOn ? " intro-cascade" : ""}`}>
       {/* Баннер проблем с BingX: приложение живо, показывает данные из базы */}
       {status && (!status.authOk || status.lastError) && (
         <div className="card px-5 py-4 border-l-4 !border-l-loss flex items-center gap-3">
@@ -105,13 +120,16 @@ export default function Dashboard() {
       {/* Главная связка по скетчу v1.1: слева большая кривая капитала (1),
           справа колонка с капиталом и метриками (2). Над графиком — ничего. */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
-        <div className="lg:col-span-2 card p-5 rise-in">
+        <div
+          className="lg:col-span-2 card p-5 intro-chart"
+          style={{ "--intro-delay": "90ms" } as React.CSSProperties}
+        >
           <div className="text-sm text-muted mb-3">Кривая капитала · {period} дн</div>
           <EquityChart data={equityCurve} height={440} />
         </div>
 
         <div className="space-y-4">
-          <div className="card px-5 py-4 rise-in" style={{ "--rise-delay": "40ms" } as React.CSSProperties}>
+          <div className="card px-5 py-4 intro-item" style={{ "--intro-delay": "0ms" } as React.CSSProperties}>
             <div className="text-xs text-muted uppercase tracking-wider mb-1.5">Общий капитал</div>
             <div className="text-3xl font-semibold num">
               {currentEquity ? `${currentEquity.equity.toLocaleString("ru-RU", { maximumFractionDigits: 2 })} USDT` : "—"}
@@ -125,7 +143,7 @@ export default function Dashboard() {
             )}
           </div>
 
-          <div className="flex gap-1 card p-1 rise-in" style={{ "--rise-delay": "80ms" } as React.CSSProperties}>
+          <div className="flex gap-1 card p-1 intro-item" style={{ "--intro-delay": "40ms" } as React.CSSProperties}>
             {PERIODS.map((p) => (
               <button
                 key={p}
@@ -140,11 +158,11 @@ export default function Dashboard() {
           </div>
 
           {stats && stats.trades === 0 ? (
-            <div className="card px-5 py-8 text-center text-muted text-sm rise-in" style={{ "--rise-delay": "120ms" } as React.CSSProperties}>
+            <div className="card px-5 py-8 text-center text-muted text-sm intro-item" style={{ "--intro-delay": "150ms" } as React.CSSProperties}>
               Нет закрытых сделок за выбранный период
             </div>
           ) : stats ? (
-            <div className="card px-5 py-4 space-y-3 text-sm rise-in" style={{ "--rise-delay": "120ms" } as React.CSSProperties}>
+            <div className="card px-5 py-4 space-y-3 text-sm intro-item" style={{ "--intro-delay": "150ms" } as React.CSSProperties}>
               <StatRow
                 label={`PnL за ${period} дн`}
                 value={
@@ -196,7 +214,7 @@ export default function Dashboard() {
       </div>
 
       {/* Открытые позиции */}
-      <div className="card p-5 rise-in" style={{ "--rise-delay": "160ms" } as React.CSSProperties}>
+      <div className="card p-5 intro-item" style={{ "--intro-delay": "220ms" } as React.CSSProperties}>
         <div className="text-sm text-muted mb-3">Открытые позиции</div>
         {positions.length === 0 ? (
           <div className="py-6 text-center text-muted text-sm">Нет открытых позиций</div>
