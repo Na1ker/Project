@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import "./globals.css";
+import { ProfileMenu } from "@/components/ProfileMenu";
 import { SyncIndicator } from "@/components/SyncIndicator";
 
 export const metadata: Metadata = {
@@ -30,10 +31,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Link href="/" className="hover:text-white transition-colors">Дашборд</Link>
               <Link href="/trades" className="hover:text-white transition-colors">Сделки</Link>
               <Link href="/analysis" className="hover:text-white transition-colors">Анализ</Link>
-              <Link href="/settings" className="hover:text-white transition-colors">Настройки</Link>
             </nav>
-            <div className="ml-auto">
+            <div className="ml-auto flex items-center gap-4">
               <SyncIndicator />
+              <ProfileMenu />
             </div>
           </div>
         </header>

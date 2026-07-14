@@ -14,9 +14,25 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Сделка не найдена" }, { status: 404 });
   }
 
-  const note = db.prepare("SELECT text, updated_at FROM notes WHERE trade_key = ?").get(trade.trade_key) as
-    | { text: string; updated_at: number }
-    | undefined;
+  // v1.3: журнал записей (новые сверху) и фигуры разметки графика.
+  const journal = (db
+    .prepare("SELECT id, text, created_at FROM note_entries WHERE trade_key = ? ORDER BY created_at DESC, id DESC")
+    .all(trade.trade_key) as Array<{ id: number; text: string; created_at: number }>)
+    .map((e) => ({ id: e.id, text: e.text, createdAt: e.created_at }));
+
+  const drawings = (db
+    .prepare("SELECT * FROM drawings WHERE trade_key = ? ORDER BY created_at")
+    .all(trade.trade_key) as Array<{
+      id: number; p1_ts: number; p1_price: number; p2_ts: number; p2_price: number; color: string; created_at: number;
+    }>)
+    .map((d) => ({
+      id: d.id,
+      kind: "trendline" as const,
+      p1: { ts: d.p1_ts, price: d.p1_price },
+      p2: { ts: d.p2_ts, price: d.p2_price },
+      color: d.color,
+      createdAt: d.created_at,
+    }));
 
   // Сделки из истории позиций не хранят fill_ids — исполнения привязываются
   // по инструменту и интервалу времени позиции (требование 4 спеки v1.1).
@@ -56,7 +72,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
   return NextResponse.json({
     trade: { ...trade, net_pnl: netPnl(trade) },
-    note: note ?? null,
+    journal,
+    drawings,
     fills,
     position,
   });

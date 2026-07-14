@@ -1,8 +1,9 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { TradeChart } from "@/components/TradeChart";
+import { ActiveTool, TradeChart } from "@/components/TradeChart";
+import { Drawing, JournalEntry } from "@/lib/dataset";
 import { fmtDateTime, fmtDuration, fmtMoney, fmtPrice, fmtQty, pnlColor } from "@/lib/format";
 
 interface Trade {
@@ -45,7 +46,11 @@ export default function TradePage({ params }: { params: Promise<{ id: string }> 
   const [position, setPosition] = useState<{ unrealized_pnl: number; mark_price: number } | null>(null);
   const [fills, setFills] = useState<Fill[]>([]);
   const [noteText, setNoteText] = useState("");
-  const [noteSaved, setNoteSaved] = useState<"idle" | "saving" | "saved">("idle");
+  const [noteSaved, setNoteSaved] = useState<"idle" | "saving">("idle");
+  const [journal, setJournal] = useState<JournalEntry[]>([]);
+  const [drawings, setDrawings] = useState<Drawing[]>([]);
+  const [activeTool, setActiveTool] = useState<ActiveTool>(null);
+  const [toolMenuOpen, setToolMenuOpen] = useState(false);
   const [candleData, setCandleData] = useState<CandleData | null>(null);
   const [notFound, setNotFound] = useState(false);
 
@@ -60,7 +65,8 @@ export default function TradePage({ params }: { params: Promise<{ id: string }> 
         setTrade(d.trade);
         setPosition(d.position ?? null);
         setFills(d.fills ?? []);
-        setNoteText(d.note?.text ?? "");
+        setJournal(d.journal ?? []);
+        setDrawings(d.drawings ?? []);
       })
       .catch(() => {});
     fetch(`/api/trades/${id}/candles`)
@@ -69,16 +75,74 @@ export default function TradePage({ params }: { params: Promise<{ id: string }> 
       .catch(() => setCandleData({ interval: "", candles: [], unavailable: true }));
   }, [id]);
 
-  async function saveNote() {
+  // Журнал: запись добавляется в список, поле очищается (требования 1-2 спеки v1.3).
+  async function addJournalEntry() {
+    const text = noteText.trim();
+    if (!text) return;
     setNoteSaved("saving");
-    await fetch(`/api/trades/${id}/note`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: noteText }),
-    });
-    setNoteSaved("saved");
-    setTimeout(() => setNoteSaved("idle"), 2000);
+    try {
+      const res = await fetch(`/api/trades/${id}/journal`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      if (res.ok) {
+        const { entry } = await res.json();
+        setJournal((j) => [entry, ...j]);
+        setNoteText("");
+      }
+    } finally {
+      setNoteSaved("idle");
+    }
   }
+
+  async function deleteJournalEntry(entryId: number) {
+    setJournal((j) => j.filter((e) => e.id !== entryId));
+    await fetch(`/api/trades/${id}/journal/${entryId}`, { method: "DELETE" });
+  }
+
+  // Линия сохраняется сразу после второй точки (требование 7 спеки v1.3).
+  async function addDrawing(p1: { ts: number; price: number }, p2: { ts: number; price: number }) {
+    setActiveTool(null);
+    const res = await fetch(`/api/trades/${id}/drawings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind: "trendline", p1, p2, color: "#c22b3f" }),
+    });
+    if (res.ok) {
+      const { drawing } = await res.json();
+      setDrawings((ds) => [...ds, drawing]);
+    }
+  }
+
+  async function deleteDrawing(drawingId: number) {
+    setDrawings((ds) => ds.filter((d) => d.id !== drawingId));
+    await fetch(`/api/trades/${id}/drawings/${drawingId}`, { method: "DELETE" });
+  }
+
+  const isOpen = trade?.status === "open";
+  // Для определения вход/выход: у long вход = BUY, у short вход = SELL.
+  const isEntryFill = (f: Fill) =>
+    trade?.direction === "long" ? f.side === "BUY" : f.side === "SELL";
+
+  // Стабильная ссылка на маркеры: иначе каждый рендер страницы пересоздаёт
+  // график (сброс зума при добавлении линии/записи журнала).
+  const chartMarks = useMemo(() => {
+    if (!trade) return [];
+    return fills.length > 0
+      ? fills.map((f) => ({
+          ts: f.ts,
+          side: f.side,
+          price: f.price,
+          isEntry: trade.direction === "long" ? f.side === "BUY" : f.side === "SELL",
+        }))
+      : [
+          { ts: trade.opened_at, side: "BUY" as const, price: trade.avg_entry, isEntry: true },
+          ...(trade.closed_at && trade.avg_exit != null
+            ? [{ ts: trade.closed_at, side: "SELL" as const, price: trade.avg_exit, isEntry: false }]
+            : []),
+        ];
+  }, [fills, trade]);
 
   if (notFound) {
     return (
@@ -88,11 +152,6 @@ export default function TradePage({ params }: { params: Promise<{ id: string }> 
     );
   }
   if (!trade) return <div className="py-16 text-center text-muted text-sm loading-pulse">Загрузка…</div>;
-
-  const isOpen = trade.status === "open";
-  // Для определения вход/выход: у long вход = BUY, у short вход = SELL.
-  const isEntryFill = (f: Fill) =>
-    trade.direction === "long" ? f.side === "BUY" : f.side === "SELL";
 
   return (
     <div className="space-y-5">
@@ -131,24 +190,55 @@ export default function TradePage({ params }: { params: Promise<{ id: string }> 
               </div>
               <TradeChart
                 candles={candleData.candles}
-                marks={
-                  fills.length > 0
-                    ? fills.map((f) => ({
-                        ts: f.ts,
-                        side: f.side,
-                        price: f.price,
-                        isEntry: isEntryFill(f),
-                      }))
-                    : // Fills не покрывают сделку — маркеры входа/выхода строим
-                      // из средних цен и времён истории позиции (крайний случай спеки).
-                      [
-                        { ts: trade.opened_at, side: "BUY" as const, price: trade.avg_entry, isEntry: true },
-                        ...(trade.closed_at && trade.avg_exit != null
-                          ? [{ ts: trade.closed_at, side: "SELL" as const, price: trade.avg_exit, isEntry: false }]
-                          : []),
-                      ]
-                }
+                marks={chartMarks}
+                drawings={drawings}
+                activeTool={activeTool}
+                onDrawingComplete={addDrawing}
+                onDrawingDelete={deleteDrawing}
               />
+              {/* Кнопка инструментов под графиком (требование 5 спеки v1.3) */}
+              <div className="relative mt-3 flex items-center gap-2">
+                <button
+                  onClick={() => setToolMenuOpen((o) => !o)}
+                  aria-label="Инструменты рисования"
+                  className={`pressable w-8 h-8 rounded-lg border flex items-center justify-center ${
+                    activeTool || toolMenuOpen
+                      ? "border-accent-bright text-accent-bright bg-accent/10"
+                      : "border-border text-muted hover:text-white"
+                  }`}
+                >
+                  {/* Иконка «инструмент»: диагональная линия с точками */}
+                  <svg viewBox="0 0 16 16" className="w-4 h-4" fill="none" aria-hidden="true">
+                    <line x1="3.5" y1="12.5" x2="12.5" y2="3.5" stroke="currentColor" strokeWidth="1.5" />
+                    <circle cx="3.5" cy="12.5" r="1.8" fill="currentColor" />
+                    <circle cx="12.5" cy="3.5" r="1.8" fill="currentColor" />
+                  </svg>
+                </button>
+                {activeTool === "trendline" && (
+                  <span className="text-xs text-accent-bright">Трендовая линия — кликни две точки на графике</span>
+                )}
+                {toolMenuOpen && (
+                  <div className="absolute bottom-10 left-0 card p-1 z-10 rise-in min-w-44">
+                    <button
+                      onClick={() => { setActiveTool("trendline"); setToolMenuOpen(false); }}
+                      className="pressable w-full text-left px-3 py-2 rounded-lg text-sm hover:bg-card-hover flex items-center gap-2"
+                    >
+                      <svg viewBox="0 0 16 16" className="w-3.5 h-3.5" fill="none" aria-hidden="true">
+                        <line x1="3" y1="13" x2="13" y2="3" stroke="currentColor" strokeWidth="1.5" />
+                      </svg>
+                      Трендовая линия
+                    </button>
+                    {activeTool && (
+                      <button
+                        onClick={() => { setActiveTool(null); setToolMenuOpen(false); }}
+                        className="pressable w-full text-left px-3 py-2 rounded-lg text-sm text-muted hover:bg-card-hover"
+                      >
+                        Выключить инструмент
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             </>
           )}
         </div>
@@ -216,23 +306,45 @@ export default function TradePage({ params }: { params: Promise<{ id: string }> 
             </div>
           )}
 
-          {/* Заметка «почему зашёл» (требование 17) */}
+          {/* Журнал «почему зашёл» (спека v1.3: записи копятся, поле очищается) */}
           <div className="card p-5">
-            <div className="text-xs text-muted uppercase tracking-wider mb-3">Почему зашёл</div>
+            <div className="text-xs text-muted uppercase tracking-wider mb-3">
+              Журнал сделки{journal.length > 0 ? ` (${journal.length})` : ""}
+            </div>
             <textarea
               value={noteText}
               onChange={(e) => setNoteText(e.target.value)}
               placeholder="Причина входа, сетап, что видел на графике…"
-              rows={4}
+              rows={3}
               className="w-full bg-bg border border-border rounded-xl px-3 py-2.5 text-sm resize-y focus:outline-none focus:border-accent-bright"
             />
             <button
-              onClick={saveNote}
-              disabled={noteSaved === "saving"}
+              onClick={addJournalEntry}
+              disabled={noteSaved === "saving" || noteText.trim() === ""}
               className="mt-2 w-full bg-accent hover:bg-accent-bright pressable rounded-xl py-2 text-sm font-medium disabled:opacity-50"
             >
-              {noteSaved === "saving" ? "Сохраняю…" : noteSaved === "saved" ? "Сохранено ✓" : "Сохранить заметку"}
+              {noteSaved === "saving" ? "Сохраняю…" : "Сохранить заметку"}
             </button>
+
+            {journal.length > 0 && (
+              <div className="mt-4 space-y-3">
+                {journal.map((e) => (
+                  <div key={e.id} className="group bg-bg border border-border rounded-xl px-3 py-2.5 rise-in">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <span className="text-[11px] text-muted num">{fmtDateTime(e.createdAt)}</span>
+                      <button
+                        onClick={() => deleteJournalEntry(e.id)}
+                        aria-label="Удалить запись"
+                        className="pressable text-muted hover:text-loss text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    <div className="text-sm whitespace-pre-wrap">{e.text}</div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

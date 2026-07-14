@@ -147,6 +147,43 @@ function migrate(db: DatabaseSync) {
   if (!posCols.includes("margin_mode")) {
     db.exec("ALTER TABLE positions ADD COLUMN margin_mode TEXT");
   }
+
+  // v1.3: журнал заметок (несколько записей на сделку) и фигуры разметки графика.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS note_entries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      trade_key TEXT NOT NULL,
+      text TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_note_entries_trade ON note_entries(trade_key);
+
+    CREATE TABLE IF NOT EXISTS drawings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      trade_key TEXT NOT NULL,
+      kind TEXT NOT NULL,          -- trendline (v1)
+      p1_ts INTEGER NOT NULL,      -- unix ms
+      p1_price REAL NOT NULL,
+      p2_ts INTEGER NOT NULL,
+      p2_price REAL NOT NULL,
+      color TEXT NOT NULL DEFAULT '#c22b3f',
+      created_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_drawings_trade ON drawings(trade_key);
+  `);
+
+  // Разовая миграция: старые одиночные заметки становятся первыми записями
+  // журнала (существующая заметка пользователя не теряется — требование спеки).
+  const migrated = db
+    .prepare("SELECT COUNT(*) c FROM settings WHERE key = 'notes_migrated_v13'")
+    .get() as { c: number };
+  if (migrated.c === 0) {
+    db.exec(`
+      INSERT INTO note_entries (trade_key, text, created_at)
+      SELECT trade_key, text, updated_at FROM notes;
+      INSERT INTO settings (key, value) VALUES ('notes_migrated_v13', 'true');
+    `);
+  }
 }
 
 export function getSetting(key: string): string | null {

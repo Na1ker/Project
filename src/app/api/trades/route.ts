@@ -11,8 +11,8 @@ export async function GET(req: NextRequest) {
   const hf = hiddenFilter();
   const rows = getDb()
     .prepare(
-      `SELECT t.*, (n.trade_key IS NOT NULL) AS has_note
-       FROM trades t LEFT JOIN notes n ON n.trade_key = t.trade_key
+      `SELECT t.*, EXISTS(SELECT 1 FROM note_entries n WHERE n.trade_key = t.trade_key) AS has_note
+       FROM trades t
        WHERE t.status = ?${hf.clause.replaceAll("symbol", "t.symbol")}
        ORDER BY COALESCE(t.closed_at, t.opened_at) DESC
        LIMIT ?`,

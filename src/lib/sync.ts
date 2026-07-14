@@ -267,13 +267,13 @@ function syncOpenTrades() {
   }
 }
 
-/** Перенос заметки на позиционную сделку того же инструмента с открытием ±5 минут. */
+/**
+ * Перенос артефактов сделки (журнал заметок, фигуры разметки, легаси-заметка)
+ * на позиционную сделку того же инструмента с открытием ±5 минут.
+ * v1.3: журнал и линии переезжают вместе со сделкой при её закрытии.
+ */
 function migrateNote(oldKey: string, symbol: string, openedAt: number) {
   const db = getDb();
-  const note = db.prepare("SELECT text, updated_at FROM notes WHERE trade_key = ?").get(oldKey) as
-    | { text: string; updated_at: number }
-    | undefined;
-  if (!note) return;
   const target = db
     .prepare(
       `SELECT trade_key FROM trades
@@ -281,11 +281,22 @@ function migrateNote(oldKey: string, symbol: string, openedAt: number) {
        LIMIT 1`,
     )
     .get(symbol, openedAt) as { trade_key: string } | undefined;
-  if (!target) return; // заметка остаётся в базе под старым ключом (спека: не удаляем)
-  db.prepare(
-    `INSERT INTO notes (trade_key, text, updated_at) VALUES (?, ?, ?)
-     ON CONFLICT(trade_key) DO NOTHING`,
-  ).run(target.trade_key, note.text, note.updated_at);
+  if (!target) return; // артефакты остаются в базе под старым ключом (спека: не удаляем)
+
+  db.prepare("UPDATE note_entries SET trade_key = ? WHERE trade_key = ?").run(target.trade_key, oldKey);
+  db.prepare("UPDATE drawings SET trade_key = ? WHERE trade_key = ?").run(target.trade_key, oldKey);
+
+  // Легаси-таблица одиночных заметок (данные уже скопированы в журнал при
+  // миграции v1.3, но на случай записи, созданной до обновления, — переносим).
+  const note = db.prepare("SELECT text, updated_at FROM notes WHERE trade_key = ?").get(oldKey) as
+    | { text: string; updated_at: number }
+    | undefined;
+  if (note) {
+    db.prepare(
+      `INSERT INTO notes (trade_key, text, updated_at) VALUES (?, ?, ?)
+       ON CONFLICT(trade_key) DO NOTHING`,
+    ).run(target.trade_key, note.text, note.updated_at);
+  }
 }
 
 /**
